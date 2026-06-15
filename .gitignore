@@ -1,0 +1,69 @@
+﻿# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Build output
+dist/
+build/
+out/
+dist-ssr/
+coverage/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Caches
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+.vite/
+.turbo/
+.eslintcache
+*.tsbuildinfo
+
+# Temporary / OS files
+tmp/
+temp/
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Tooling / local session data
+.trae/
+
+# Archives and large/binary artifacts
+*.zip
+*.rar
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+*.bz2
+*.xz
+*.iso
+*.dmg
+*.pkg
+*.exe
+*.msi
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.psd
+*.ai
