@@ -53,6 +53,13 @@ class UndergroundRadioGame {
                 repairDone: [],
                 rumorSuppressDone: []
             },
+            editingDesk: {
+                materialFilter: 'all',
+                timeline: [],
+                generatedProgram: null,
+                dailyPrograms: [],
+                unlockedMaterials: GameData.materials.filter(m => m.unlocked).map(m => m.id)
+            },
             gameOver: false
         };
     }
@@ -105,6 +112,15 @@ class UndergroundRadioGame {
         if (saved) {
             try {
                 this.gameState = JSON.parse(saved);
+                if (!this.gameState.editingDesk) {
+                    this.gameState.editingDesk = {
+                        materialFilter: 'all',
+                        timeline: [],
+                        generatedProgram: null,
+                        dailyPrograms: [],
+                        unlockedMaterials: GameData.materials.filter(m => m.unlocked).map(m => m.id)
+                };
+            }
                 this.showEvent('读取存档', '成功读取游戏存档！', []);
             } catch (e) {
                 this.gameState = this.getDefaultState();
@@ -121,7 +137,7 @@ class UndergroundRadioGame {
             this.gameState = this.getDefaultState();
             this.generateDailyRumors();
             this.renderAll();
-            this.showEvent('新游戏开始', '欢迎来到地下广播站！你的任务是维持广播运营，安抚民心，管理物资和幸存者。', []);
+            this.showEvent('新游戏开始', '欢迎来到地下广播站！你的任务是维持广播运营，安抚民心，管理物资和幸存者。试试新的剪辑台功能吧！', []);
         }
     }
 
@@ -150,6 +166,19 @@ class UndergroundRadioGame {
         });
 
         document.getElementById('modalCloseBtn').addEventListener('click', () => this.closeModal());
+
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => this.filterMaterials(e.target.dataset.filter));
+        });
+
+        document.getElementById('clearTimelineBtn').addEventListener('click', () => this.clearTimeline());
+        document.getElementById('generateProgramBtn').addEventListener('click', () => this.generateProgram());
+        document.getElementById('scheduleProgramBtn').addEventListener('click', () => this.scheduleProgram());
+
+        const timelineTrack = document.getElementById('timelineTrack');
+        timelineTrack.addEventListener('dragover', (e) => this.handleTimelineDragOver(e));
+        timelineTrack.addEventListener('dragleave', (e) => this.handleTimelineDragLeave(e));
+        timelineTrack.addEventListener('drop', (e) => this.handleTimelineDrop(e));
     }
 
     switchTab(tabName) {
@@ -170,6 +199,7 @@ class UndergroundRadioGame {
         this.renderSurvivors();
         this.renderDistrictTrust();
         this.renderSchedule();
+        this.renderEditingDesk();
         this.renderBroadcasts();
         this.renderEquipment();
         this.renderRumors();
@@ -300,10 +330,23 @@ class UndergroundRadioGame {
 
             const current = this.gameState.schedule[slot];
             if (current) {
-                const program = GameData.programTypes.find(p => p.id === current);
-                slotDisplay.textContent = program ? program.name : '未安排';
+                if (current === 'editing_program') {
+                    const editingProgram = this.gameState.editingDesk.dailyPrograms.find(p => p.scheduledSlot === slot);
+                    if (editingProgram) {
+                        const ratingInfo = GameData.ratingNames[editingProgram.scores.rating];
+                        slotDisplay.textContent = `🎬 ${editingProgram.name} (${ratingInfo.name})`;
+                        slotDisplay.style.color = ratingInfo.color;
+                    } else {
+                        slotDisplay.textContent = '🎬 剪辑节目';
+                    }
+                } else {
+                    const program = GameData.programTypes.find(p => p.id === current);
+                    slotDisplay.textContent = program ? program.name : '未安排';
+                    slotDisplay.style.color = '';
+                }
             } else {
                 slotDisplay.textContent = '未安排';
+                slotDisplay.style.color = '';
             }
         });
     }
@@ -493,6 +536,9 @@ class UndergroundRadioGame {
     }
 
     selectProgram(slot, programId) {
+        if (this.gameState.schedule[slot] === 'editing_program') {
+            if (!confirm('该时段已安排剪辑节目，是否替换为普通节目？')) return;
+        }
         this.gameState.schedule[slot] = programId;
         this.renderSchedule();
     }
@@ -685,21 +731,32 @@ class UndergroundRadioGame {
             rumor: 0,
             fatigue: 0,
             morale: 0,
-            food: 0
+            food: 0,
+            trust: 0
         };
 
         let totalPowerUsed = 0;
         ['morning', 'afternoon', 'evening'].forEach(slot => {
             const programId = this.gameState.schedule[slot];
             if (programId) {
-                const program = GameData.programTypes.find(p => p.id === programId);
-                if (program) {
-                    totalPowerUsed += program.power;
-                    Object.entries(program.effects).forEach(([k, v]) => {
-                        if (dayEffects[k] !== undefined) {
-                            dayEffects[k] += v;
-                        }
-                    });
+                if (programId === 'editing_program') {
+                    const editingProgram = this.gameState.editingDesk.dailyPrograms.find(p => p.scheduledSlot === slot);
+                    if (editingProgram) {
+                        totalPowerUsed += 8;
+                        dayEffects.rumor += editingProgram.effects.rumor;
+                        dayEffects.morale += editingProgram.effects.morale;
+                        dayEffects.trust += editingProgram.effects.trust;
+                    }
+                } else {
+                    const program = GameData.programTypes.find(p => p.id === programId);
+                    if (program) {
+                        totalPowerUsed += program.power;
+                        Object.entries(program.effects).forEach(([k, v]) => {
+                            if (dayEffects[k] !== undefined) {
+                                dayEffects[k] += v;
+                            }
+                        });
+                    }
                 }
             }
         });
@@ -787,8 +844,12 @@ class UndergroundRadioGame {
             repairDone: [],
             rumorSuppressDone: []
         };
+        this.gameState.editingDesk.timeline = [];
+        this.gameState.editingDesk.generatedProgram = null;
+        this.gameState.editingDesk.dailyPrograms = [];
 
         this.generateDailyRumors();
+        this.unlockRandomMaterial();
 
         this.gameState.equipment.forEach(eq => {
             eq.condition = Math.max(0, eq.condition - 3);
@@ -846,6 +907,466 @@ class UndergroundRadioGame {
 
     closeModal() {
         document.getElementById('eventModal').classList.remove('active');
+    }
+
+    filterMaterials(filter) {
+        this.gameState.editingDesk.materialFilter = filter;
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.filter === filter);
+        });
+        this.renderMaterials();
+    }
+
+    renderEditingDesk() {
+        this.renderMaterials();
+        this.renderTimeline();
+        this.renderPreview();
+    }
+
+    renderMaterials() {
+        const container = document.getElementById('materialsGrid');
+        const filter = this.gameState.editingDesk.materialFilter;
+        const unlockedIds = this.gameState.editingDesk.unlockedMaterials;
+        
+        let materials = GameData.materials.filter(m => unlockedIds.includes(m.id));
+        if (filter !== 'all') {
+            materials = materials.filter(m => m.type === filter);
+        }
+
+        container.innerHTML = '';
+        materials.forEach(material => {
+            const typeInfo = GameData.materialTypes[material.type];
+            const card = document.createElement('div');
+            card.className = `material-card ${material.type}`;
+            card.draggable = true;
+            card.dataset.materialId = material.id;
+            
+            card.innerHTML = `
+                <div class="material-title">
+                    <span>${material.name}</span>
+                    <span class="material-type" style="background:${typeInfo.color}">${typeInfo.icon}</span>
+                </div>
+                <div class="material-desc">${material.description}</div>
+                <div class="material-stats">
+                    <div class="material-stat"><span>真实度</span><span>${material.authenticity}</span></div>
+                    <div class="material-stat"><span>感染力</span><span>${material.appeal}</span></div>
+                    <div class="material-stat"><span>刺激性</span><span>${material.stimulation}</span></div>
+                    <div class="material-stat"><span>时长</span><span>${material.duration}分</span></div>
+                </div>
+            `;
+
+            card.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('materialId', material.id);
+                e.dataTransfer.setData('source', 'library');
+                card.classList.add('dragging');
+            });
+
+            card.addEventListener('dragend', () => {
+                card.classList.remove('dragging');
+            });
+
+            card.addEventListener('dblclick', () => {
+                this.addMaterialToTimeline(material.id);
+            });
+
+            container.appendChild(card);
+        });
+    }
+
+    renderTimeline() {
+        const track = document.getElementById('timelineTrack');
+        const placeholder = document.getElementById('timelinePlaceholder');
+        const timeline = this.gameState.editingDesk.timeline;
+        const durationSpan = document.getElementById('timelineDuration');
+        const generateBtn = document.getElementById('generateProgramBtn');
+
+        let totalDuration = 0;
+        timeline.forEach(id => {
+            const material = GameData.materials.find(m => m.id === id);
+            if (material) totalDuration += material.duration;
+        });
+
+        durationSpan.textContent = `总时长: ${totalDuration}分钟`;
+        generateBtn.disabled = timeline.length < 2;
+
+        if (timeline.length === 0) {
+            placeholder.classList.remove('hidden');
+            const existingItems = track.querySelector('.timeline-items');
+            if (existingItems) existingItems.remove();
+            return;
+        }
+
+        placeholder.classList.add('hidden');
+
+        let itemsContainer = track.querySelector('.timeline-items');
+        if (!itemsContainer) {
+            itemsContainer = document.createElement('div');
+            itemsContainer.className = 'timeline-items';
+            track.appendChild(itemsContainer);
+        }
+
+        itemsContainer.innerHTML = '';
+        timeline.forEach((materialId, index) => {
+            const material = GameData.materials.find(m => m.id === materialId);
+            if (!material) return;
+
+            const typeInfo = GameData.materialTypes[material.type];
+            const item = document.createElement('div');
+            item.className = 'timeline-item';
+            item.draggable = true;
+            item.dataset.index = index;
+            item.dataset.materialId = materialId;
+            item.style.borderLeft = `3px solid ${typeInfo.color}`;
+
+            item.innerHTML = `
+                <span class="timeline-item-handle">⋮⋮</span>
+                <div class="timeline-item-info">
+                    <div class="timeline-item-name">${typeInfo.icon} ${material.name}</div>
+                    <div class="timeline-item-meta">真实度 ${material.authenticity} | 感染力 ${material.appeal} | ${material.duration}分钟</div>
+                </div>
+                <button class="timeline-item-remove" title="移除">×</button>
+            `;
+
+            item.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('source', 'timeline');
+                e.dataTransfer.setData('fromIndex', index);
+                item.classList.add('dragging');
+            });
+
+            item.addEventListener('dragend', () => {
+                item.classList.remove('dragging');
+                document.querySelectorAll('.timeline-item').forEach(i => i.classList.remove('drag-over'));
+            });
+
+            item.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                item.classList.add('drag-over');
+            });
+
+            item.addEventListener('dragleave', () => {
+                item.classList.remove('drag-over');
+            });
+
+            item.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                item.classList.remove('drag-over');
+                
+                const source = e.dataTransfer.getData('source');
+                if (source === 'timeline') {
+                    const fromIndex = parseInt(e.dataTransfer.getData('fromIndex'));
+                    this.reorderTimeline(fromIndex, index);
+                } else {
+                    const materialId = e.dataTransfer.getData('materialId');
+                    this.insertMaterialToTimeline(materialId, index);
+                }
+            });
+
+            item.querySelector('.timeline-item-remove').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.removeMaterialFromTimeline(index);
+            });
+
+            itemsContainer.appendChild(item);
+        });
+    }
+
+    renderPreview() {
+        const timeline = this.gameState.editingDesk.timeline;
+        const materials = timeline.map(id => GameData.materials.find(m => m.id === id)).filter(Boolean);
+
+        document.getElementById('scoreAuthenticity').style.width = '0%';
+        document.getElementById('scoreAppeal').style.width = '0%';
+        document.getElementById('scoreStimulation').style.width = '0%';
+        document.getElementById('scoreVariety').style.width = '0%';
+        document.getElementById('valueAuthenticity').textContent = '0';
+        document.getElementById('valueAppeal').textContent = '0';
+        document.getElementById('valueStimulation').textContent = '0';
+        document.getElementById('valueVariety').textContent = '0';
+
+        const ratingBadge = document.getElementById('ratingBadge');
+        const ratingDesc = document.getElementById('ratingDesc');
+        const effectTags = document.getElementById('effectTags');
+        const previewActions = document.getElementById('previewActions');
+
+        if (materials.length === 0) {
+            ratingBadge.textContent = '--';
+            ratingBadge.style.background = 'rgba(255,255,255,0.1)';
+            ratingBadge.style.color = '#888';
+            ratingDesc.textContent = '请添加素材以查看评价';
+            effectTags.innerHTML = '<span class="effect-tag neutral">请添加素材</span>';
+            previewActions.style.display = 'none';
+            return;
+        }
+
+        const scores = this.calculateProgramScore(materials);
+        const effects = this.calculateProgramEffects(scores, materials);
+
+        setTimeout(() => {
+            document.getElementById('scoreAuthenticity').style.width = scores.totalAuthenticity + '%';
+            document.getElementById('scoreAppeal').style.width = scores.totalAppeal + '%';
+            document.getElementById('scoreStimulation').style.width = scores.totalStimulation + '%';
+            document.getElementById('scoreVariety').style.width = scores.varietyScore + '%';
+        }, 50);
+
+        document.getElementById('valueAuthenticity').textContent = Math.round(scores.totalAuthenticity);
+        document.getElementById('valueAppeal').textContent = Math.round(scores.totalAppeal);
+        document.getElementById('valueStimulation').textContent = Math.round(scores.totalStimulation);
+        document.getElementById('valueVariety').textContent = Math.round(scores.varietyScore);
+
+        const ratingInfo = GameData.ratingNames[scores.rating];
+        ratingBadge.textContent = ratingInfo.name;
+        ratingBadge.style.background = ratingInfo.color + '33';
+        ratingBadge.style.color = ratingInfo.color;
+        ratingDesc.textContent = ratingInfo.desc;
+
+        effectTags.innerHTML = '';
+        if (effects.trust !== 0) {
+            const tag = document.createElement('span');
+            tag.className = `effect-tag ${effects.trust > 0 ? 'positive' : 'negative'}`;
+            tag.textContent = `🤝信任 ${effects.trust > 0 ? '+' : ''}${effects.trust}`;
+            effectTags.appendChild(tag);
+        }
+        if (effects.morale !== 0) {
+            const tag = document.createElement('span');
+            tag.className = `effect-tag ${effects.morale > 0 ? 'positive' : 'negative'}`;
+            tag.textContent = `❤️民心 ${effects.morale > 0 ? '+' : ''}${effects.morale}`;
+            effectTags.appendChild(tag);
+        }
+        if (effects.rumor !== 0) {
+            const tag = document.createElement('span');
+            tag.className = `effect-tag ${effects.rumor < 0 ? 'positive' : 'negative'}`;
+            tag.textContent = `🗣️谣言 ${effects.rumor > 0 ? '+' : ''}${effects.rumor}`;
+            effectTags.appendChild(tag);
+        }
+
+        if (this.gameState.editingDesk.generatedProgram) {
+            previewActions.style.display = 'block';
+        } else {
+            previewActions.style.display = 'none';
+        }
+    }
+
+    calculateProgramScore(materials) {
+        if (materials.length === 0) {
+            return { totalAuthenticity: 0, totalAppeal: 0, totalStimulation: 0, varietyScore: 0, durationScore: 0, overall: 0, rating: 'chaotic' };
+        }
+
+        const totalAuthenticity = materials.reduce((sum, m) => sum + m.authenticity, 0) / materials.length;
+        const totalAppeal = materials.reduce((sum, m) => sum + m.appeal, 0) / materials.length;
+        const totalStimulation = materials.reduce((sum, m) => sum + m.stimulation, 0) / materials.length;
+
+        const typeCount = new Set(materials.map(m => m.type)).size;
+        let varietyScore = 0;
+        if (typeCount === 1) varietyScore = 30;
+        else if (typeCount === 2) varietyScore = 70;
+        else if (typeCount >= 3) varietyScore = 100;
+
+        const totalDuration = materials.reduce((sum, m) => sum + m.duration, 0);
+        let durationScore = 0;
+        if (totalDuration < 10) durationScore = 40;
+        else if (totalDuration <= 45) durationScore = 100;
+        else durationScore = 60;
+
+        const overall = (totalAuthenticity * 0.3 + totalAppeal * 0.3 + varietyScore * 0.25 + durationScore * 0.15);
+
+        let rating = 'chaotic';
+        if (overall >= 85) rating = 'perfect';
+        else if (overall >= 70) rating = 'good';
+        else if (overall >= 50) rating = 'normal';
+
+        return { totalAuthenticity, totalAppeal, totalStimulation, varietyScore, durationScore, overall, rating };
+    }
+
+    calculateProgramEffects(scores, materials) {
+        const { totalAuthenticity, totalAppeal, totalStimulation, rating } = scores;
+
+        let trust = totalAuthenticity * 0.5 - totalStimulation * 0.3;
+        let morale = totalAppeal * 0.6;
+        let rumor = -totalAuthenticity * 0.4 + totalStimulation * 0.5;
+
+        const ratingBonus = {
+            perfect: { trust: 10, morale: 15, rumor: -15 },
+            good: { trust: 5, morale: 8, rumor: -8 },
+            normal: { trust: 0, morale: 0, rumor: 0 },
+            chaotic: { trust: -10, morale: -5, rumor: 10 }
+        };
+
+        trust += ratingBonus[rating].trust;
+        morale += ratingBonus[rating].morale;
+        rumor += ratingBonus[rating].rumor;
+
+        const typeCount = materials.reduce((acc, m) => {
+            acc[m.type] = (acc[m.type] || 0) + 1;
+            return acc;
+        }, {});
+
+        if (typeCount.interview && typeCount.letter) morale += 5;
+        if (typeCount.official && typeCount.news) rumor -= 8;
+        if (typeCount.ambient) morale += 3;
+
+        return {
+            trust: Math.round(trust),
+            morale: Math.round(morale),
+            rumor: Math.round(rumor)
+        };
+    }
+
+    handleTimelineDragOver(e) {
+        e.preventDefault();
+        e.currentTarget.classList.add('drag-over');
+    }
+
+    handleTimelineDragLeave(e) {
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+    }
+
+    handleTimelineDrop(e) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-over');
+        
+        const source = e.dataTransfer.getData('source');
+        if (source === 'library') {
+            const materialId = e.dataTransfer.getData('materialId');
+            this.addMaterialToTimeline(materialId);
+        }
+    }
+
+    addMaterialToTimeline(materialId) {
+        if (this.gameState.editingDesk.timeline.length >= 8) {
+            this.showEvent('轨道已满', '最多只能添加8个素材到轨道中。', []);
+            return;
+        }
+
+        const material = GameData.materials.find(m => m.id === materialId);
+        if (!material || !this.gameState.editingDesk.unlockedMaterials.includes(materialId)) {
+            return;
+        }
+
+        this.gameState.editingDesk.timeline.push(materialId);
+        this.gameState.editingDesk.generatedProgram = null;
+        this.renderTimeline();
+        this.renderPreview();
+    }
+
+    insertMaterialToTimeline(materialId, index) {
+        if (this.gameState.editingDesk.timeline.length >= 8) {
+            this.showEvent('轨道已满', '最多只能添加8个素材到轨道中。', []);
+            return;
+        }
+
+        const material = GameData.materials.find(m => m.id === materialId);
+        if (!material || !this.gameState.editingDesk.unlockedMaterials.includes(materialId)) {
+            return;
+        }
+
+        this.gameState.editingDesk.timeline.splice(index, 0, materialId);
+        this.gameState.editingDesk.generatedProgram = null;
+        this.renderTimeline();
+        this.renderPreview();
+    }
+
+    removeMaterialFromTimeline(index) {
+        this.gameState.editingDesk.timeline.splice(index, 1);
+        this.gameState.editingDesk.generatedProgram = null;
+        this.renderTimeline();
+        this.renderPreview();
+    }
+
+    reorderTimeline(fromIndex, toIndex) {
+        const timeline = this.gameState.editingDesk.timeline;
+        const [removed] = timeline.splice(fromIndex, 1);
+        timeline.splice(toIndex, 0, removed);
+        this.gameState.editingDesk.generatedProgram = null;
+        this.renderTimeline();
+        this.renderPreview();
+    }
+
+    clearTimeline() {
+        this.gameState.editingDesk.timeline = [];
+        this.gameState.editingDesk.generatedProgram = null;
+        this.renderTimeline();
+        this.renderPreview();
+    }
+
+    generateProgram() {
+        const timeline = this.gameState.editingDesk.timeline;
+        if (timeline.length < 2) return;
+
+        const materials = timeline.map(id => GameData.materials.find(m => m.id === id)).filter(Boolean);
+        const scores = this.calculateProgramScore(materials);
+        const effects = this.calculateProgramEffects(scores, materials);
+        const totalDuration = materials.reduce((sum, m) => sum + m.duration, 0);
+
+        const program = {
+            id: 'program_' + Date.now(),
+            name: `特别节目 - 第${this.gameState.day}天`,
+            materials: [...timeline],
+            totalDuration,
+            scores,
+            effects,
+            day: this.gameState.day,
+            scheduledSlot: null
+        };
+
+        this.gameState.editingDesk.generatedProgram = program;
+
+        const effectTags = [
+            { text: `综合评分: ${Math.round(scores.overall)}分`, type: scores.overall >= 70 ? 'positive' : 'negative' },
+            { text: `评级: ${GameData.ratingNames[scores.rating].name}`, type: scores.rating === 'perfect' || scores.rating === 'good' ? 'positive' : 'negative' }
+        ];
+
+        if (effects.trust !== 0) effectTags.push({ text: `🤝信任 ${effects.trust > 0 ? '+' : ''}${effects.trust}`, type: effects.trust > 0 ? 'positive' : 'negative' });
+        if (effects.morale !== 0) effectTags.push({ text: `❤️民心 ${effects.morale > 0 ? '+' : ''}${effects.morale}`, type: effects.morale > 0 ? 'positive' : 'negative' });
+        if (effects.rumor !== 0) effectTags.push({ text: `🗣️谣言 ${effects.rumor > 0 ? '+' : ''}${effects.rumor}`, type: effects.rumor < 0 ? 'positive' : 'negative' });
+
+        this.showEvent('节目生成成功', `已生成"${program.name}"，时长${totalDuration}分钟。可选择时段加入今日播出。`, effectTags);
+        this.renderPreview();
+    }
+
+    scheduleProgram() {
+        const program = this.gameState.editingDesk.generatedProgram;
+        const slot = document.getElementById('scheduleSlotSelect').value;
+
+        if (!program || !slot) return;
+
+        if (this.gameState.todayActions.broadcastDone) {
+            this.showEvent('无法安排', '今日已完成播报，无法再安排节目。', []);
+            return;
+        }
+
+        if (this.gameState.schedule[slot]) {
+            if (!confirm(`该时段已有节目安排，是否替换？`)) return;
+        }
+
+        this.gameState.schedule[slot] = 'editing_program';
+        program.scheduledSlot = slot;
+        this.gameState.editingDesk.dailyPrograms.push(program);
+
+        const effectTags = [
+            { text: `已安排到${slot === 'morning' ? '早间' : slot === 'afternoon' ? '午间' : '晚间'}时段`, type: 'positive' }
+        ];
+
+        this.showEvent('节目已安排', `"${program.name}"已加入今日播出队列，将在${slot === 'morning' ? '早间' : slot === 'afternoon' ? '午间' : '晚间'}时段播出。`, effectTags);
+
+        this.gameState.editingDesk.timeline = [];
+        this.gameState.editingDesk.generatedProgram = null;
+        document.getElementById('scheduleSlotSelect').value = '';
+
+        this.renderAll();
+    }
+
+    unlockRandomMaterial() {
+        const locked = GameData.materials.filter(m => !this.gameState.editingDesk.unlockedMaterials.includes(m.id));
+        if (locked.length > 0 && Math.random() < 0.3) {
+            const material = locked[Math.floor(Math.random() * locked.length)];
+            this.gameState.editingDesk.unlockedMaterials.push(material.id);
+            this.showEvent('解锁新素材', `解锁了新素材：${GameData.materialTypes[material.type].icon} ${material.name}`, [{ text: '🎬 新素材可用', type: 'positive' }]);
+            return true;
+        }
+        return false;
     }
 
     gameOver(title, message) {

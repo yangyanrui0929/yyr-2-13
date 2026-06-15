@@ -86,6 +86,7 @@
             <main class="center-panel">
                 <div class="tab-buttons">
                     <button class="tab-btn active" data-tab="schedule">📅 节目编排</button>
+                    <button class="tab-btn" data-tab="editing">🎬 剪辑台</button>
                     <button class="tab-btn" data-tab="broadcast">📢 播报消息</button>
                     <button class="tab-btn" data-tab="qa">❓ 听众问答</button>
                     <button class="tab-btn" data-tab="repair">🔧 设备维修</button>
@@ -116,6 +117,92 @@
                                 <span class="slot-program" id="slotEvening">未安排</span>
                             </div>
                             <div class="program-options" id="eveningOptions"></div>
+                        </div>
+                    </div>
+
+                    <div id="editing" class="tab-pane">
+                        <h3>🎬 广播剪辑台</h3>
+                        <p style="color:#888; margin-bottom:15px; font-size:13px">拖拽素材到剪辑轨道，组合成一期特别节目。合理搭配不同类型素材可获得最佳效果！</p>
+                        
+                        <div class="editing-desk">
+                            <div class="editing-materials">
+                                <div class="materials-header">
+                                    <h4>📚 素材库</h4>
+                                </div>
+                                <div class="material-filters" id="materialFilters">
+                                    <button class="filter-btn active" data-filter="all">全部</button>
+                                    <button class="filter-btn" data-filter="interview">🎙️ 采访</button>
+                                    <button class="filter-btn" data-filter="letter">✉️ 来信</button>
+                                    <button class="filter-btn" data-filter="official">📢 官方</button>
+                                    <button class="filter-btn" data-filter="ambient">🌊 环境</button>
+                                    <button class="filter-btn" data-filter="news">📰 新闻</button>
+                                </div>
+                                <div class="materials-grid" id="materialsGrid"></div>
+                            </div>
+
+                            <div class="editing-timeline">
+                                <div class="timeline-header">
+                                    <h4>🎚️ 剪辑轨道</h4>
+                                    <span class="timeline-duration" id="timelineDuration">总时长: 0分钟</span>
+                                </div>
+                                <div class="timeline-track" id="timelineTrack">
+                                    <div class="timeline-placeholder" id="timelinePlaceholder">
+                                        <span>⬇️ 将素材拖拽到此处开始剪辑</span>
+                                    </div>
+                                </div>
+                                <div class="timeline-actions">
+                                    <button id="clearTimelineBtn" class="btn btn-secondary">清空轨道</button>
+                                    <button id="generateProgramBtn" class="btn btn-primary" disabled>生成节目</button>
+                                </div>
+                            </div>
+
+                            <div class="editing-preview">
+                                <div class="preview-header">
+                                    <h4>👁️ 效果预览</h4>
+                                </div>
+                                <div class="preview-scores" id="previewScores">
+                                    <div class="score-item">
+                                        <span class="score-label">真实度</span>
+                                        <div class="score-bar"><div class="score-fill authenticity" id="scoreAuthenticity"></div></div>
+                                        <span class="score-value" id="valueAuthenticity">0</span>
+                                    </div>
+                                    <div class="score-item">
+                                        <span class="score-label">感染力</span>
+                                        <div class="score-bar"><div class="score-fill appeal" id="scoreAppeal"></div></div>
+                                        <span class="score-value" id="valueAppeal">0</span>
+                                    </div>
+                                    <div class="score-item">
+                                        <span class="score-label">刺激性</span>
+                                        <div class="score-bar"><div class="score-fill stimulation" id="scoreStimulation"></div></div>
+                                        <span class="score-value" id="valueStimulation">0</span>
+                                    </div>
+                                    <div class="score-item">
+                                        <span class="score-label">多样性</span>
+                                        <div class="score-bar"><div class="score-fill variety" id="scoreVariety"></div></div>
+                                        <span class="score-value" id="valueVariety">0</span>
+                                    </div>
+                                </div>
+                                <div class="preview-rating" id="previewRating">
+                                    <div class="rating-badge" id="ratingBadge">--</div>
+                                    <p class="rating-desc" id="ratingDesc">请添加素材以查看评价</p>
+                                </div>
+                                <div class="preview-effects" id="previewEffects">
+                                    <h5>预计效果</h5>
+                                    <div class="effect-tags" id="effectTags">
+                                        <span class="effect-tag neutral">请添加素材</span>
+                                    </div>
+                                </div>
+                                <div class="preview-actions" id="previewActions" style="display:none">
+                                    <h5>加入播出</h5>
+                                    <select id="scheduleSlotSelect">
+                                        <option value="">选择播出时段...</option>
+                                        <option value="morning">🌅 早间时段</option>
+                                        <option value="afternoon">☀️ 午间时段</option>
+                                        <option value="evening">🌙 晚间时段</option>
+                                    </select>
+                                    <button id="scheduleProgramBtn" class="btn btn-primary">加入今日播出</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
